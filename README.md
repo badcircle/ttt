@@ -26,7 +26,7 @@ A simple command-line implementation of Tic-tac-toe where you play against the c
 1. Clone the repository:
 ```bash
 git clone https://github.com/badcircle/ttt.git
-cd tictactoe
+cd ttt
 ```
 
 2. Compile with GCC:
