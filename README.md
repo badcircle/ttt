@@ -77,7 +77,7 @@ The code is organized to facilitate future networking capabilities:
 
 ## License
 
-[Choose an appropriate license and add it here]
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
 
 ## Contributing
 
