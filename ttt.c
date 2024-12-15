@@ -21,12 +21,10 @@ typedef struct {
     char player;
 } Move;
 
-// New function prototypes for enhanced CPU play
+// function prototypes
 Move find_winning_move(const GameState* state, char player);
 Move find_random_move(const GameState* state);
-int is_valid_move(const GameState* state, int row, int col);
-
-// Existing function prototypes
+int is_valid_move(const GameSta
 void init_game_state(GameState* state);
 int process_move(GameState* state, Move move);
 int check_winner(const GameState* state);
