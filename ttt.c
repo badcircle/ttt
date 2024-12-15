@@ -1,92 +1,99 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 #define EMPTY_CELL '_'
 #define HUMAN_PLAYER 'X'
 #define CPU_PLAYER 'O'
+#define BOARD_SIZE 3
 
-// Board is 3x3
-char game_board[3][3];
-FILE* game_log;
+// Game state structure (will be useful for networking)
+typedef struct {
+    char board[BOARD_SIZE][BOARD_SIZE];
+    char current_player;
+    int game_active;
+} GameState;
 
-void init_game_board() {
-    for(int i = 0; i < 3; i++) {
-        for(int j = 0; j < 3; j++) {
-            game_board[i][j] = EMPTY_CELL;
+// Move structure (will be useful for networking)
+typedef struct {
+    int row;
+    int col;
+    char player;
+} Move;
+
+// Function prototypes
+void init_game_state(GameState* state);
+int process_move(GameState* state, Move move);
+int check_winner(const GameState* state);
+int is_board_full(const GameState* state);
+Move get_cpu_move(const GameState* state);
+Move get_player_move(const GameState* state);
+void log_final_state(const GameState* state, const char* result);
+void display_board(const GameState* state);
+void log_move(const Move* move);
+
+// Game state functions
+void init_game_state(GameState* state) {
+    for(int i = 0; i < BOARD_SIZE; i++) {
+        for(int j = 0; j < BOARD_SIZE; j++) {
+            state->board[i][j] = EMPTY_CELL;
         }
     }
+    state->current_player = HUMAN_PLAYER;
+    state->game_active = 1;
 }
 
-void log_message(const char* message) {
-    fprintf(game_log, "%s\n", message);
-}
-
-void display_board() {
-    printf("\n");
-    for(int i = 0; i < 3; i++) {
-        for(int j = 0; j < 3; j++) {
-            printf(" %c ", game_board[i][j]);
-            if(j < 2) printf("|");
-        }
-        printf("\n");
-        if(i < 2) printf("-----------\n");
+int process_move(GameState* state, Move move) {
+    if (move.row < 0 || move.row >= BOARD_SIZE || 
+        move.col < 0 || move.col >= BOARD_SIZE ||
+        state->board[move.row][move.col] != EMPTY_CELL) {
+        return 0;
     }
-    printf("\n");
+    
+    state->board[move.row][move.col] = move.player;
+    return 1;
 }
 
-void log_board_state() {
-    fprintf(game_log, "\nCurrent board state:\n");
-    for(int i = 0; i < 3; i++) {
-        for(int j = 0; j < 3; j++) {
-            fprintf(game_log, " %c ", game_board[i][j]);
-            if(j < 2) fprintf(game_log, "|");
-        }
-        fprintf(game_log, "\n");
-        if(i < 2) fprintf(game_log, "-----------\n");
-    }
-    fprintf(game_log, "\n");
-}
-
-int check_winner() {
+int check_winner(const GameState* state) {
     // Check rows
-    for(int i = 0; i < 3; i++) {
-        if(game_board[i][0] != EMPTY_CELL && 
-           game_board[i][0] == game_board[i][1] && 
-           game_board[i][1] == game_board[i][2]) {
+    for(int i = 0; i < BOARD_SIZE; i++) {
+        if(state->board[i][0] != EMPTY_CELL && 
+           state->board[i][0] == state->board[i][1] && 
+           state->board[i][1] == state->board[i][2]) {
             return 1;
         }
     }
     
     // Check columns
-    for(int i = 0; i < 3; i++) {
-        if(game_board[0][i] != EMPTY_CELL && 
-           game_board[0][i] == game_board[1][i] && 
-           game_board[1][i] == game_board[2][i]) {
+    for(int i = 0; i < BOARD_SIZE; i++) {
+        if(state->board[0][i] != EMPTY_CELL && 
+           state->board[0][i] == state->board[1][i] && 
+           state->board[1][i] == state->board[2][i]) {
             return 1;
         }
     }
     
     // Check diagonals
-    if(game_board[0][0] != EMPTY_CELL && 
-       game_board[0][0] == game_board[1][1] && 
-       game_board[1][1] == game_board[2][2]) {
+    if(state->board[0][0] != EMPTY_CELL && 
+       state->board[0][0] == state->board[1][1] && 
+       state->board[1][1] == state->board[2][2]) {
         return 1;
     }
     
-    if(game_board[0][2] != EMPTY_CELL && 
-       game_board[0][2] == game_board[1][1] && 
-       game_board[1][1] == game_board[2][0]) {
+    if(state->board[0][2] != EMPTY_CELL && 
+       state->board[0][2] == state->board[1][1] && 
+       state->board[1][1] == state->board[2][0]) {
         return 1;
     }
     
     return 0;
 }
 
-int is_board_full() {
-    for(int i = 0; i < 3; i++) {
-        for(int j = 0; j < 3; j++) {
-            if(game_board[i][j] == EMPTY_CELL) {
+int is_board_full(const GameState* state) {
+    for(int i = 0; i < BOARD_SIZE; i++) {
+        for(int j = 0; j < BOARD_SIZE; j++) {
+            if(state->board[i][j] == EMPTY_CELL) {
                 return 0;
             }
         }
@@ -94,87 +101,133 @@ int is_board_full() {
     return 1;
 }
 
-void make_cpu_move() {
-    // Simple CPU strategy: choose random empty cell
-    int row, col;
-    do {
-        row = rand() % 3;
-        col = rand() % 3;
-    } while(game_board[row][col] != EMPTY_CELL);
+// I/O functions
+Move get_cpu_move(const GameState* state) {
+    Move move;
+    move.player = CPU_PLAYER;
     
-    game_board[row][col] = CPU_PLAYER;
-    fprintf(game_log, "CPU placed O at position (%d,%d)\n", row + 1, col + 1);
+    do {
+        move.row = rand() % BOARD_SIZE;
+        move.col = rand() % BOARD_SIZE;
+    } while(state->board[move.row][move.col] != EMPTY_CELL);
+    
+    return move;
+}
+
+Move get_player_move(const GameState* state) {
+    Move move;
+    move.player = HUMAN_PLAYER;
+    
+    while(1) {
+        printf("Enter row (1-3) and column (1-3) separated by space: ");
+        scanf("%d %d", &move.row, &move.col);
+        move.row--; move.col--; // Convert to 0-based indexing
+        
+        if(move.row >= 0 && move.row < BOARD_SIZE && 
+           move.col >= 0 && move.col < BOARD_SIZE && 
+           state->board[move.row][move.col] == EMPTY_CELL) {
+            break;
+        }
+        printf("Invalid move! Try again.\n");
+    }
+    
+    return move;
+}
+
+void log_final_state(const GameState* state, const char* result) {
+    FILE* game_log = fopen("tictactoe.log", "a");
+    if(game_log == NULL) return;
+    
+    // Get timestamp
+    time_t now = time(NULL);
+    char timestamp[26];
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    
+    fprintf(game_log, "\n=== Game Ended: %s ===\n", timestamp);
+    fprintf(game_log, "Result: %s\n", result);
+    fprintf(game_log, "Final board state:\n");
+    
+    for(int i = 0; i < BOARD_SIZE; i++) {
+        for(int j = 0; j < BOARD_SIZE; j++) {
+            fprintf(game_log, " %c ", state->board[i][j]);
+            if(j < BOARD_SIZE-1) fprintf(game_log, "|");
+        }
+        fprintf(game_log, "\n");
+        if(i < BOARD_SIZE-1) fprintf(game_log, "-----------\n");
+    }
+    fprintf(game_log, "\n");
+    
+    fclose(game_log);
+}
+
+void log_move(const Move* move) {
+    FILE* game_log = fopen("tictactoe.log", "a");
+    if(game_log == NULL) return;
+    
+    fprintf(game_log, "%c placed at position (%d,%d)\n", 
+            move->player, move->row + 1, move->col + 1);
+    
+    fclose(game_log);
+}
+
+void display_board(const GameState* state) {
+    printf("\n");
+    for(int i = 0; i < BOARD_SIZE; i++) {
+        for(int j = 0; j < BOARD_SIZE; j++) {
+            printf(" %c ", state->board[i][j]);
+            if(j < BOARD_SIZE-1) printf("|");
+        }
+        printf("\n");
+        if(i < BOARD_SIZE-1) printf("-----------\n");
+    }
+    printf("\n");
 }
 
 int main() {
-    // Initialize random seed
     srand(time(NULL));
+    GameState game_state;
+    Move current_move;
     
-    // Open log file
-    game_log = fopen("tictactoe.log", "w");
-    if(game_log == NULL) {
-        printf("Error opening log file!\n");
-        return 1;
-    }
+    init_game_state(&game_state);
+    display_board(&game_state);
     
-    log_message("Game started");
-    
-    init_game_board();
-    display_board();
-    log_board_state();
-    
-    while(1) {
-        int row, col;
-        
+    while(game_state.game_active) {
         // Human turn
-        while(1) {
-            printf("Enter row (1-3) and column (1-3) separated by space: ");
-            scanf("%d %d", &row, &col);
-            row--; col--; // Convert to 0-based indexing
-            
-            if(row >= 0 && row < 3 && col >= 0 && col < 3 && 
-               game_board[row][col] == EMPTY_CELL) {
-                break;
-            }
-            printf("Invalid move! Try again.\n");
-        }
+        current_move = get_player_move(&game_state);
+        process_move(&game_state, current_move);
+        log_move(&current_move);
+        display_board(&game_state);
         
-        game_board[row][col] = HUMAN_PLAYER;
-        fprintf(game_log, "Player placed X at position (%d,%d)\n", row + 1, col + 1);
-        
-        display_board();
-        log_board_state();
-        
-        if(check_winner()) {
+        if(check_winner(&game_state)) {
             printf("You win!\n");
-            log_message("Player wins!");
+            log_final_state(&game_state, "Player wins!");
             break;
         }
         
-        if(is_board_full()) {
+        if(is_board_full(&game_state)) {
             printf("It's a tie!\n");
-            log_message("Game ended in a tie!");
+            log_final_state(&game_state, "Game ended in a tie!");
             break;
         }
         
         // CPU turn
-        make_cpu_move();
-        display_board();
-        log_board_state();
+        current_move = get_cpu_move(&game_state);
+        process_move(&game_state, current_move);
+        log_move(&current_move);
+        display_board(&game_state);
         
-        if(check_winner()) {
+        if(check_winner(&game_state)) {
             printf("CPU wins!\n");
-            log_message("CPU wins!");
+            log_final_state(&game_state, "CPU wins!");
             break;
         }
         
-        if(is_board_full()) {
+        if(is_board_full(&game_state)) {
             printf("It's a tie!\n");
-            log_message("Game ended in a tie!");
+            log_final_state(&game_state, "Game ended in a tie!");
             break;
         }
     }
     
-    fclose(game_log);
     return 0;
 }
